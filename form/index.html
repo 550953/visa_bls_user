@@ -1,109 +1,222 @@
 <!DOCTYPE html>
 <html lang="ru">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Анкета</title>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
+  <title>Анкета заявителя</title>
+  <link rel="stylesheet" href="style.css">
 </head>
 <body>
 
-<h3>Анкета (тест)</h3>
+<div class="app-header">
+  <h1>Анкета заявителя</h1>
+  <div class="progress-row">
+    <div class="progress-track"><div class="progress-fill" id="progressFill"></div></div>
+    <div class="progress-label" id="progressLabel">0 / 50</div>
+  </div>
+</div>
 
-<p>Как тебя зовут</p>
-<input type="text" id="field_name" style="width:100%;padding:8px;box-sizing:border-box;">
+<div id="listView">
+  <div id="secList"></div>
 
-<br><br>
-<button id="btnSave">Сохранить</button>
-<button id="btnDownload">Скачать JSON</button>
-<button id="btnLoad">Загрузить JSON</button>
-<input type="file" id="fileInput" accept="application/json" style="display:none;">
-<br><br>
-<button id="btnSend">Отправить в бот</button>
+  <div id="errorPanel" class="panel err" style="display:none;">
+    <h3 id="errorTitle"></h3>
+    <ul id="errorList"></ul>
+  </div>
 
-<p id="status" style="color:green;"></p>
+  <div id="resultPanel" class="panel ok" style="display:none;">
+    <h3>Готово — JSON сформирован</h3>
+    <p style="font-size:13px;color:var(--ink2);margin-bottom:10px;">61 поле, даты ГГГГ-ММ-ДД.</p>
+    <pre id="jsonOut"></pre>
+    <div class="result-actions">
+      <button class="btn btn-primary" id="copyJsonBtn" type="button">Скопировать</button>
+      <button class="btn btn-ghost" id="downloadJsonBtn" type="button">Скачать</button>
+    </div>
+  </div>
+</div>
 
-<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<div class="bottom-bar">
+  <button class="btn btn-primary" id="buildBtn" type="button">Сформировать JSON</button>
+  <button class="btn btn-ghost" id="menuBtn" type="button" style="flex:0 0 auto;padding:13px 14px;">⋯</button>
+</div>
+
+<div class="menu-overlay" id="menuOverlay">
+  <div class="menu-sheet">
+    <button class="menu-item" id="exportDraftBtn" type="button">⇩  Скачать черновик</button>
+    <button class="menu-item" id="importDraftBtn" type="button">⇧  Загрузить черновик</button>
+    <input type="file" id="importDraftInput" accept="application/json,.json" style="display:none;">
+    <div class="menu-sep"></div>
+    <button class="menu-item" id="clearBtn" type="button">✕  Очистить всё</button>
+    <button class="menu-item" id="closeMenuBtn" type="button" style="color:var(--ink2);">Отмена</button>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="app.js"></script>
 <script>
-const tg = window.Telegram ? window.Telegram.WebApp : null;
-if (tg) { tg.ready(); tg.expand(); }
+(function () {
+  "use strict";
+  var state = App.loadState();
 
-const STORAGE_KEY = 'anketa_data';
+  function renderList() {
+    var list = document.getElementById("secList");
+    list.innerHTML = "";
+    App.GROUPS.forEach(function (g) {
+      var c = App.countFilled(state, g.id);
+      var a = document.createElement("a");
+      a.className = "sec-item";
+      a.href = "form.html?g=" + g.id;
 
-function getData() {
-  return { name: document.getElementById('field_name').value };
-}
+      var icon = document.createElement("div");
+      icon.className = "sec-icon";
+      if (g.optional && !state.toggleG9 && c.done === 0) {
+        icon.className += " empty";
+        icon.textContent = "○";
+      } else if (c.done === c.total && c.total > 0) {
+        icon.className += " done";
+        icon.textContent = "✓";
+      } else if (c.done > 0 || (g.optional && state.toggleG9)) {
+        icon.className += " open";
+        icon.textContent = "●";
+      } else {
+        icon.className += " empty";
+        icon.textContent = "○";
+      }
 
-function setData(data) {
-  document.getElementById('field_name').value = data.name || '';
-}
+      var body = document.createElement("div");
+      body.className = "sec-body";
+      var title = document.createElement("div");
+      title.className = "sec-title";
+      title.textContent = g.title;
+      var meta = document.createElement("div");
+      meta.className = "sec-meta";
+      if (g.optional && !state.toggleG9) {
+        meta.textContent = "необязательно";
+      } else if (c.done === c.total && c.total > 0) {
+        meta.textContent = c.done + " из " + c.total;
+      } else {
+        meta.textContent = c.done + " из " + c.total + (c.done < c.total ? " · продолжить" : "");
+      }
+      body.appendChild(title);
+      body.appendChild(meta);
 
-function loadFromStorage() {
-  // Пытаемся из Telegram CloudStorage, иначе из localStorage
-  if (tg && tg.CloudStorage) {
-    tg.CloudStorage.getItem(STORAGE_KEY, (err, value) => {
-      if (!err && value) setData(JSON.parse(value));
+      var arrow = document.createElement("div");
+      arrow.className = "sec-arrow";
+      arrow.textContent = "›";
+
+      a.appendChild(icon);
+      a.appendChild(body);
+      a.appendChild(arrow);
+      list.appendChild(a);
     });
-  } else {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) setData(JSON.parse(raw));
+
+    var p = App.totalProgress(state);
+    var pct = p.total ? Math.round(p.done / p.total * 100) : 0;
+    document.getElementById("progressFill").style.width = pct + "%";
+    document.getElementById("progressLabel").textContent = p.done + " / " + p.total;
   }
-}
 
-function saveToStorage() {
-  const data = getData();
-  const json = JSON.stringify(data);
-  if (tg && tg.CloudStorage) {
-    tg.CloudStorage.setItem(STORAGE_KEY, json);
-  } else {
-    localStorage.setItem(STORAGE_KEY, json);
-  }
-  document.getElementById('status').textContent = 'Сохранено: ' + json;
-}
+  document.getElementById("buildBtn").addEventListener("click", function () {
+    var res = App.buildJson(state);
+    var ep = document.getElementById("errorPanel");
+    var rp = document.getElementById("resultPanel");
+    rp.style.display = "none";
 
-document.getElementById('btnSave').onclick = saveToStorage;
-
-document.getElementById('btnDownload').onclick = () => {
-  const data = getData();
-  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = 'anketa.json';
-  a.click();
-  URL.revokeObjectURL(url);
-};
-
-document.getElementById('btnLoad').onclick = () => {
-  document.getElementById('fileInput').click();
-};
-
-document.getElementById('fileInput').onchange = (e) => {
-  const file = e.target.files[0];
-  if (!file) return;
-  const reader = new FileReader();
-  reader.onload = (ev) => {
-    try {
-      const data = JSON.parse(ev.target.result);
-      setData(data);
-      document.getElementById('status').textContent = 'Загружено из файла';
-    } catch (err) {
-      document.getElementById('status').textContent = 'Ошибка чтения JSON';
+    if (!res.ok) {
+      ep.style.display = "block";
+      document.getElementById("errorTitle").textContent = "Ошибки: " + res.errors.length;
+      var ul = document.getElementById("errorList");
+      ul.innerHTML = "";
+      res.errors.forEach(function (e) {
+        var li = document.createElement("li");
+        var a = document.createElement("a");
+        a.href = "form.html?g=" + e.group;
+        a.textContent = e.msg;
+        li.appendChild(a);
+        ul.appendChild(li);
+      });
+      ep.scrollIntoView({ behavior: "smooth", block: "start" });
+      return;
     }
-  };
-  reader.readAsText(file);
-};
 
-document.getElementById('btnSend').onclick = () => {
-  const data = getData();
-  if (tg) {
-    tg.sendData(JSON.stringify(data));
-  } else {
-    alert('Открыто вне Telegram, sendData недоступен. Данные: ' + JSON.stringify(data));
-  }
-};
+    ep.style.display = "none";
+    document.getElementById("jsonOut").textContent = res.str;
+    window.__lastJson = res.str;
+    rp.style.display = "block";
+    rp.scrollIntoView({ behavior: "smooth", block: "start" });
+  });
 
-loadFromStorage();
+  document.getElementById("copyJsonBtn").addEventListener("click", function () {
+    App.copyText(window.__lastJson || "", this);
+  });
+
+  document.getElementById("downloadJsonBtn").addEventListener("click", function () {
+    App.downloadBlob(window.__lastJson || "", "applicant.json");
+  });
+
+  /* Menu */
+  var overlay = document.getElementById("menuOverlay");
+  document.getElementById("menuBtn").addEventListener("click", function () { overlay.style.display = "block"; });
+  document.getElementById("closeMenuBtn").addEventListener("click", function () { overlay.style.display = "none"; });
+  overlay.addEventListener("click", function (e) { if (e.target === overlay) overlay.style.display = "none"; });
+
+  document.getElementById("exportDraftBtn").addEventListener("click", function () {
+    overlay.style.display = "none";
+    var payload = {
+      __kind: "schengen_form_draft",
+      __savedAt: new Date().toISOString(),
+      data: { values: state.values, otherValues: state.otherValues, toggleG9: state.toggleG9 }
+    };
+    App.downloadBlob(JSON.stringify(payload, null, 2), "anketa-chernovik-" + new Date().toISOString().slice(0, 10) + ".json");
+    App.showToast("Черновик скачан");
+  });
+
+  var importInput = document.getElementById("importDraftInput");
+  document.getElementById("importDraftBtn").addEventListener("click", function () {
+    overlay.style.display = "none";
+    importInput.value = "";
+    importInput.click();
+  });
+  importInput.addEventListener("change", function () {
+    var file = importInput.files && importInput.files[0];
+    if (!file) return;
+    var reader = new FileReader();
+    reader.onload = function () {
+      try {
+        var parsed = JSON.parse(reader.result);
+        var data = (parsed && parsed.__kind === "schengen_form_draft") ? parsed.data : parsed;
+        if (data && data.values) {
+          state.values = data.values || {};
+          state.otherValues = data.otherValues || {};
+          state.toggleG9 = !!data.toggleG9;
+          App.saveState(state);
+          renderList();
+          App.showToast("Черновик загружен");
+        } else {
+          App.showToast("Нет данных анкеты");
+        }
+      } catch (e) {
+        App.showToast("Файл повреждён");
+      }
+    };
+    reader.readAsText(file, "utf-8");
+  });
+
+  document.getElementById("clearBtn").addEventListener("click", function () {
+    overlay.style.display = "none";
+    if (confirm("Очистить все данные?")) {
+      state = { values: {}, otherValues: {}, toggleG9: false };
+      App.clearState();
+      renderList();
+      document.getElementById("resultPanel").style.display = "none";
+      document.getElementById("errorPanel").style.display = "none";
+      App.showToast("Очищено");
+    }
+  });
+
+  renderList();
+})();
 </script>
-
 </body>
 </html>
