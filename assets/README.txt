@@ -1,0 +1,1 @@
+avatar.jpg     — аватар бота (в @BotFather → Edit Bot → Edit Botpic)\nstart.jpg      — фото при /start (используется скриптом)\nstart-alt.jpg  — запасной вариант для /start (подставьте вручную, если нужен)\n

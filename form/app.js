@@ -56,6 +56,20 @@
     ["Эстония", "Estonia"], ["Эфиопия", "Ethiopia"], ["ЮАР", "South Africa"], ["Ямайка", "Jamaica"], ["Япония", "Japan"]
   ].sort(function (a, b) { return a[0].localeCompare(b[0], "ru"); });
 
+  // Россия и СССР — в начале списка (удобнее для анкеты)
+  (function pinTop() {
+    var pin = ["Russian Federation", "USSR"];
+    var top = [], rest = [];
+    COUNTRIES.forEach(function (p) {
+      if (pin.indexOf(p[1]) !== -1) top.push(p);
+      else rest.push(p);
+    });
+    top.sort(function (a, b) {
+      return pin.indexOf(a[1]) - pin.indexOf(b[1]);
+    });
+    COUNTRIES = top.concat(rest);
+  })();
+
   var SCHENGEN = [
     ["Австрия", "Austria"], ["Бельгия", "Belgium"], ["Болгария", "Bulgaria"], ["Венгрия", "Hungary"],
     ["Германия", "Germany"], ["Греция", "Greece"], ["Дания", "Denmark"], ["Исландия", "Iceland"],
@@ -453,16 +467,84 @@
         if (onChange) onChange();
       });
     } else if (f.type === "date") {
-      input = document.createElement("input");
-      input.type = "date";
-      input.id = f.key;
-      if (val) input.value = val;
-      wrap.appendChild(input);
-      input.addEventListener("input", function () {
-        state.values[f.key] = input.value;
+      var row = document.createElement("div");
+      row.className = "date-row";
+
+      var parts = { d: "", m: "", y: "" };
+      if (val && /^\d{4}-\d{2}-\d{2}$/.test(val)) {
+        var sp = val.split("-");
+        parts.y = sp[0];
+        parts.m = sp[1];
+        parts.d = sp[2];
+      }
+
+      function makePart(name, maxLen, placeholder) {
+        var inp = document.createElement("input");
+        inp.type = "text";
+        inp.inputMode = "numeric";
+        inp.maxLength = maxLen;
+        inp.placeholder = placeholder;
+        inp.className = "date-part date-" + name;
+        inp.id = f.key + "_" + name;
+        inp.value = parts[name] || "";
+        inp.setAttribute("autocomplete", "off");
+        inp.addEventListener("input", function () {
+          inp.value = inp.value.replace(/\D/g, "").slice(0, maxLen);
+          if (inp.value.length === maxLen) {
+            var next = name === "d" ? row.querySelector(".date-m")
+                     : name === "m" ? row.querySelector(".date-y") : null;
+            if (next) next.focus();
+          }
+          syncDate();
+        });
+        inp.addEventListener("keydown", function (e) {
+          if (e.key === "Backspace" && inp.value === "") {
+            var prev = name === "m" ? row.querySelector(".date-d")
+                     : name === "y" ? row.querySelector(".date-m") : null;
+            if (prev) {
+              e.preventDefault();
+              prev.focus();
+              prev.setSelectionRange(prev.value.length, prev.value.length);
+            }
+          }
+        });
+        return inp;
+      }
+
+      function syncDate() {
+        var dEl = row.querySelector(".date-d");
+        var mEl = row.querySelector(".date-m");
+        var yEl = row.querySelector(".date-y");
+        var d = dEl.value, m = mEl.value, y = yEl.value;
+        if (d.length === 2 && m.length === 2 && y.length === 4) {
+          state.values[f.key] = y + "-" + m + "-" + d;
+        } else {
+          state.values[f.key] = "";
+        }
+        if (hidden) hidden.value = state.values[f.key] || "";
         clearErr(f.key);
         if (onChange) onChange();
-      });
+      }
+
+      row.appendChild(makePart("d", 2, "ДД"));
+      var sep1 = document.createElement("span");
+      sep1.className = "date-sep";
+      sep1.textContent = "·";
+      row.appendChild(sep1);
+      row.appendChild(makePart("m", 2, "ММ"));
+      var sep2 = document.createElement("span");
+      sep2.className = "date-sep";
+      sep2.textContent = "·";
+      row.appendChild(sep2);
+      row.appendChild(makePart("y", 4, "ГГГГ"));
+      wrap.appendChild(row);
+
+      var hidden = document.createElement("input");
+      hidden.type = "hidden";
+      hidden.id = f.key;
+      hidden.value = val || "";
+      wrap.appendChild(hidden);
+      input = hidden;
     } else if (f.type === "number") {
       input = document.createElement("input");
       input.type = "number";

@@ -449,3 +449,60 @@ pre {
   background: var(--line);
   margin: 4px 0;
 }
+
+
+/* Дата: ДД · ММ · ГГГГ — ввод с клавиатуры */
+.date-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.date-row .date-part {
+  width: 100%;
+  text-align: center;
+  padding: 12px 8px;
+  font-size: 16px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--card);
+  color: var(--ink);
+  font-family: inherit;
+  appearance: none;
+  -webkit-appearance: none;
+}
+.date-row .date-d,
+.date-row .date-m {
+  max-width: 64px;
+  flex: 0 0 64px;
+}
+.date-row .date-y {
+  flex: 1;
+  max-width: 100px;
+}
+.date-row .date-sep {
+  color: var(--ink2);
+  font-size: 18px;
+  line-height: 1;
+  user-select: none;
+}
+.date-row .date-part:focus {
+  outline: none;
+  border-color: var(--blue);
+  box-shadow: 0 0 0 3px rgba(47, 107, 255, .15);
+}
+.field.has-error .date-part {
+  border-color: var(--err);
+  background: var(--err-bg);
+}
+
+/* Intro block on hub */
+.app-intro {
+  font-size: 13.5px;
+  color: var(--ink2);
+  margin: 0 0 12px;
+  line-height: 1.45;
+}
+.app-intro strong {
+  color: var(--ink);
+  font-weight: 600;
+}
