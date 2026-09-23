@@ -348,16 +348,74 @@
     t.__t = setTimeout(function () { t.classList.remove("show"); }, 2200);
   }
 
+  function isMobileLike() {
+    return /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent)
+      || (navigator.maxTouchPoints > 1 && window.innerWidth < 900);
+  }
+
+  /**
+   * Сохранить JSON. На телефоне сначала пробуем «Поделиться» (Файлы / Telegram / Диск),
+   * иначе — обычная загрузка в Загрузки браузера.
+   * @returns {Promise<"share"|"download">}
+   */
   function downloadBlob(text, filename) {
     var blob = new Blob([text], { type: "application/json" });
-    var url = URL.createObjectURL(blob);
-    var a = document.createElement("a");
-    a.href = url;
-    a.download = filename;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+    var file;
+
+    function classicDownload() {
+      var url = URL.createObjectURL(blob);
+      var a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      a.rel = "noopener";
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(function () { URL.revokeObjectURL(url); }, 1500);
+      return "download";
+    }
+
+    try {
+      file = new File([blob], filename, { type: "application/json" });
+    } catch (e) {
+      return Promise.resolve(classicDownload());
+    }
+
+    // Web Share API с файлом — удобно на iOS/Android
+    if (navigator.share && navigator.canShare) {
+      try {
+        if (navigator.canShare({ files: [file] })) {
+          return navigator.share({
+            files: [file],
+            title: filename,
+            text: "Анкета JSON"
+          }).then(function () {
+            return "share";
+          }).catch(function (err) {
+            // пользователь отменил — не считаем ошибкой, fallback не нужен
+            if (err && (err.name === "AbortError" || err.name === "NotAllowedError")) {
+              return "share-cancel";
+            }
+            return classicDownload();
+          });
+        }
+      } catch (e) {}
+    }
+
+    return Promise.resolve(classicDownload());
+  }
+
+  function downloadHintMessage(mode, filename) {
+    if (mode === "share") {
+      return "Выберите «Сохранить в Файлы» или отправьте себе в Telegram / на почту";
+    }
+    if (mode === "share-cancel") {
+      return "Отменено";
+    }
+    if (isMobileLike()) {
+      return "Файл «" + filename + "» — папка «Загрузки» или уведомление браузера сверху";
+    }
+    return "Файл «" + filename + "» сохранён в папку загрузок";
   }
 
   function copyText(txt, btn) {
@@ -622,6 +680,8 @@
     renderField: renderField,
     showToast: showToast,
     downloadBlob: downloadBlob,
+    downloadHintMessage: downloadHintMessage,
+    isMobileLike: isMobileLike,
     copyText: copyText
   };
 })(window);
