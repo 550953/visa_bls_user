@@ -19,7 +19,6 @@ ROOT = os.path.dirname(os.path.abspath(__file__))
 ASSETS = os.path.join(ROOT, "assets")
 START_PHOTO = os.path.join(ASSETS, "start.jpg")
 
-# общий Application — веб-API шлёт документы через него
 bot_app = None
 
 
@@ -29,12 +28,10 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     ]])
     text = (
         "👋 <b>Шенгенская анкета</b>\n\n"
-        "Заполните данные заявителя в удобной мобильной форме.\n"
-        "• 9 разделов · 61 поле\n"
-        "• автосохранение черновика\n"
-        "• даты вводятся с клавиатуры\n"
-        "• в конце — готовый JSON\n\n"
-        "Нажмите кнопку ниже, чтобы открыть анкету."
+        "Заполните данные в форме.\n"
+        "В конце нажмите <b>Получить файл в Telegram</b> — "
+        "бот пришлёт <code>applicant.json</code> в этот чат.\n\n"
+        "Кнопка ниже открывает анкету."
     )
     if os.path.isfile(START_PHOTO):
         with open(START_PHOTO, "rb") as f:
@@ -52,8 +49,7 @@ async def on_webapp_data(update: Update, context: ContextTypes.DEFAULT_TYPE):
     raw = update.effective_message.web_app_data.data
     log.info("web_app_data length=%s", len(raw) if raw else 0)
     try:
-        data = json.loads(raw)
-        pretty = json.dumps(data, ensure_ascii=False, indent=2)
+        pretty = json.dumps(json.loads(raw), ensure_ascii=False, indent=2)
     except json.JSONDecodeError:
         pretty = raw or ""
 
@@ -61,31 +57,35 @@ async def on_webapp_data(update: Update, context: ContextTypes.DEFAULT_TYPE):
     bio.name = "applicant.json"
     await update.message.reply_document(
         document=InputFile(bio, filename="applicant.json"),
-        caption="✅ Файл <b>applicant.json</b> — нажмите на него → Сохранить в Файлы.",
+        caption="✅ <b>applicant.json</b> — нажмите файл → Сохранить в Файлы.",
         parse_mode="HTML",
     )
 
 
 async def api_send_json(request: web.Request):
-    """Форма POST /api/send-json → бот шлёт document в чат user_id."""
+    """POST /api/send-json  { userId, json, filename? } → sendDocument в чат."""
     global bot_app
+    log.info("API /api/send-json hit from %s", request.remote)
+
     if bot_app is None:
+        log.error("bot_app is None")
         return web.json_response({"ok": False, "error": "bot not ready"}, status=503)
 
     try:
         body = await request.json()
     except Exception:
-        return web.json_response({"ok": False, "error": "bad json"}, status=400)
+        return web.json_response({"ok": False, "error": "bad json body"}, status=400)
 
     user_id = body.get("userId") or body.get("user_id")
     raw = body.get("json") or body.get("text") or ""
     filename = body.get("filename") or "applicant.json"
-    if not str(filename).endswith(".json"):
+    if not str(filename).lower().endswith(".json"):
         filename = str(filename) + ".json"
 
     try:
         user_id = int(user_id)
     except (TypeError, ValueError):
+        log.warning("bad userId: %r", user_id)
         return web.json_response({"ok": False, "error": "userId required"}, status=400)
 
     if not raw:
@@ -104,11 +104,12 @@ async def api_send_json(request: web.Request):
         await bot_app.bot.send_document(
             chat_id=user_id,
             document=InputFile(bio, filename=filename),
-            caption="✅ <b>{}</b> — нажмите файл → Сохранить в Файлы / Поделиться.".format(filename),
+            caption="✅ <b>{}</b> — нажмите файл → Сохранить в Файлы.".format(filename),
             parse_mode="HTML",
         )
+        log.info("send_document OK chat_id=%s file=%s bytes=%s", user_id, filename, len(pretty))
     except Exception as e:
-        log.exception("send_document failed")
+        log.exception("send_document failed chat_id=%s", user_id)
         return web.json_response({"ok": False, "error": str(e)}, status=500)
 
     return web.json_response({"ok": True})
@@ -116,14 +117,20 @@ async def api_send_json(request: web.Request):
 
 async def run_bot():
     global bot_app
-    bot_app = Application.builder().token(BOT_TOKEN).build()
+    bot_app = (
+        Application.builder()
+        .token(BOT_TOKEN)
+        .build()
+    )
     bot_app.add_handler(CommandHandler("start", start))
     bot_app.add_handler(MessageHandler(filters.StatusUpdate.WEB_APP_DATA, on_webapp_data))
 
     await bot_app.initialize()
+    # снять webhook и старые updates — меньше Conflict при одном инстансе
+    await bot_app.bot.delete_webhook(drop_pending_updates=True)
     await bot_app.start()
-    await bot_app.updater.start_polling()
-    log.info("Бот запущен (polling)")
+    await bot_app.updater.start_polling(drop_pending_updates=True)
+    log.info("Бот запущен (polling), webhook cleared")
     return bot_app
 
 
@@ -146,7 +153,7 @@ async def run_web():
     await runner.setup()
     site = web.TCPSite(runner, "0.0.0.0", PORT)
     await site.start()
-    log.info("Веб-сервер на порту %s", PORT)
+    log.info("Веб на порту %s", PORT)
 
 
 async def main():

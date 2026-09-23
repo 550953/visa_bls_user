@@ -190,7 +190,8 @@
     if (!uid) {
       return Promise.reject(new Error("no-tg-user"));
     }
-    return fetch("/api/send-json", {
+    var url = (window.location.origin || "") + "/api/send-json";
+    return fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -200,7 +201,9 @@
         initData: (getTg() && getTg().initData) || ""
       })
     }).then(function (r) {
-      return r.json().then(function (body) {
+      return r.text().then(function (txt) {
+        var body = {};
+        try { body = JSON.parse(txt); } catch (e) { body = { error: txt || ("http " + r.status) }; }
         if (!r.ok || !body.ok) throw new Error((body && body.error) || ("http " + r.status));
         return body;
       });
