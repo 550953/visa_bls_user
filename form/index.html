@@ -34,12 +34,14 @@
     <h3>Готово — JSON сформирован</h3>
     <p style="font-size:13px;color:var(--ink2);margin-bottom:10px;">61 поле, даты ГГГГ-ММ-ДД.</p>
     <pre id="jsonOut"></pre>
-    <div class="result-actions" style="flex-wrap:wrap;">
+    <div class="result-actions" style="flex-wrap:wrap;gap:8px;">
       <button class="btn btn-primary" id="sendTgBtn" type="button" style="flex:1 1 100%;">📲 Получить файл в Telegram</button>
+      <button class="btn btn-ghost" id="downloadJsonBtn" type="button" style="flex:1;">⇩ Скачать JSON</button>
+      <button class="btn btn-ghost" id="copyJsonBtn" type="button" style="flex:1;">⧉ В буфер</button>
     </div>
     <p class="result-hint" id="downloadHint" style="font-size:12.5px;color:var(--ink2);margin-top:10px;">
-      Нажмите кнопку выше — файл <b>applicant.json</b> придёт в чат с ботом.
-      Черновик можно сохранить через меню <b>⋯</b>.
+      Из Telegram — «Получить файл в Telegram». Иначе — «Скачать JSON» или «В буфер».
+      Черновик (неполный) — меню <b>⋯</b>.
     </p>
   </div>
 </div>
@@ -163,9 +165,12 @@
     rp.scrollIntoView({ behavior: "smooth", block: "start" });
   });
 
-  document.getElementById("copyJsonBtn").addEventListener("click", function () {
-    App.copyText(window.__lastJson || "", this);
-  });
+  var copyBtn = document.getElementById("copyJsonBtn");
+  if (copyBtn) {
+    copyBtn.addEventListener("click", function () {
+      App.copyText(window.__lastJson || "", this);
+    });
+  }
 
   // Telegram WebApp init (скрипт в <head>, но на всякий случай ждём)
   function getTg() {
@@ -259,26 +264,29 @@
       });
   });
 
-  document.getElementById("downloadJsonBtn").addEventListener("click", function () {
-    var json = window.__lastJson || "";
-    if (!json) return;
-    var fname = "applicant.json";
-    App.downloadBlob(json, fname).then(function (mode) {
-      var msg = App.downloadHintMessage(mode, fname);
-      if (mode !== "share-cancel") App.showToast(msg);
-      var hint = document.getElementById("downloadHint");
-      if (hint && mode !== "share-cancel") {
-        hint.innerHTML = mode === "share"
-          ? "В меню «Поделиться» выберите <b>Сохранить в Файлы</b> или отправьте себе в Telegram."
-          : (App.isMobileLike()
-              ? "Ищите файл <b>" + fname + "</b> в папке <b>Загрузки</b> или в шторке уведомлений браузера."
-              : "Файл <b>" + fname + "</b> в папке загрузок (Downloads).");
-        hint.style.display = "block";
-        clearTimeout(hint.__t);
-        hint.__t = setTimeout(function () { hint.style.display = "none"; }, 8000);
-      }
+  var downloadJsonBtn = document.getElementById("downloadJsonBtn");
+  if (downloadJsonBtn) {
+    downloadJsonBtn.addEventListener("click", function () {
+      var json = window.__lastJson || "";
+      if (!json) return;
+      var fname = "applicant.json";
+      App.downloadBlob(json, fname).then(function (mode) {
+        var msg = App.downloadHintMessage(mode, fname);
+        if (mode !== "share-cancel") App.showToast(msg);
+        var hint = document.getElementById("downloadHint");
+        if (hint && mode !== "share-cancel") {
+          hint.innerHTML = mode === "share"
+            ? "В меню «Поделиться» выберите <b>Сохранить в Файлы</b> или отправьте себе в Telegram."
+            : (App.isMobileLike()
+                ? "Ищите файл <b>" + fname + "</b> в папке <b>Загрузки</b> или в шторке уведомлений браузера."
+                : "Файл <b>" + fname + "</b> в папке загрузок (Downloads).");
+          hint.style.display = "block";
+          clearTimeout(hint.__t);
+          hint.__t = setTimeout(function () { hint.style.display = "none"; }, 8000);
+        }
+      });
     });
-  });
+  }
 
   /* Menu */
   var overlay = document.getElementById("menuOverlay");
