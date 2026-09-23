@@ -36,12 +36,11 @@
     <pre id="jsonOut"></pre>
     <div class="result-actions" style="flex-wrap:wrap;gap:8px;">
       <button class="btn btn-primary" id="sendTgBtn" type="button" style="flex:1 1 100%;">📲 Получить файл в Telegram</button>
-      <button class="btn btn-ghost" id="downloadJsonBtn" type="button" style="flex:1;">⇩ Скачать JSON</button>
+      <button class="btn btn-ghost" id="loadJsonBtn" type="button" style="flex:1;">⇧ Загрузить JSON</button>
       <button class="btn btn-ghost" id="copyJsonBtn" type="button" style="flex:1;">⧉ В буфер</button>
     </div>
     <p class="result-hint" id="downloadHint" style="font-size:12.5px;color:var(--ink2);margin-top:10px;">
-      Из Telegram — «Получить файл в Telegram». Иначе — «Скачать JSON» или «В буфер».
-      Черновик (неполный) — меню <b>⋯</b>.
+      Из Telegram — «Получить файл в Telegram». Чтобы продолжить с готовым файлом — «Загрузить JSON» или «В буфер».
     </p>
   </div>
 </div>
@@ -53,20 +52,12 @@
   </label>
   <div style="display:flex;gap:10px;width:100%;">
     <button class="btn btn-primary" id="buildBtn" type="button" style="flex:1;">Проверить</button>
-    <button class="btn btn-ghost" id="menuBtn" type="button" style="flex:0 0 auto;padding:13px 14px;">⋯</button>
+    <button class="btn btn-ghost" id="loadJsonBtnBottom" type="button" style="flex:0 0 auto;padding:13px 14px;">⇧ JSON</button>
   </div>
 </div>
 
-<div class="menu-overlay" id="menuOverlay">
-  <div class="menu-sheet">
-    <button class="menu-item" id="exportDraftBtn" type="button">⇩  Сохранить черновик (.json)</button>
-    <button class="menu-item" id="importDraftBtn" type="button">⇧  Загрузить черновик</button>
-    <input type="file" id="importDraftInput" accept="application/json,.json" style="display:none;">
-    <div class="menu-sep"></div>
-    <button class="menu-item" id="clearBtn" type="button">✕  Очистить всё</button>
-    <button class="menu-item" id="closeMenuBtn" type="button" style="color:var(--ink2);">Отмена</button>
-  </div>
-</div>
+<!-- скрытый input для загрузки JSON (используется обеими кнопками) -->
+<input type="file" id="loadJsonInput" accept="application/json,.json" style="display:none;">
 
 <div class="toast" id="toast"></div>
 
@@ -162,7 +153,11 @@
     document.getElementById("jsonOut").textContent = res.str;
     window.__lastJson = res.str;
     rp.style.display = "block";
-    rp.scrollIntoView({ behavior: "smooth", block: "start" });
+    // Прокрутка сразу к кнопкам (TG / Загрузить / Буфер)
+    setTimeout(function () {
+      var actions = document.querySelector(".result-actions") || rp;
+      actions.scrollIntoView({ behavior: "smooth", block: "center" });
+    }, 50);
   });
 
   var copyBtn = document.getElementById("copyJsonBtn");
@@ -172,14 +167,13 @@
     });
   }
 
-  // Telegram WebApp init (скрипт в <head>, но на всякий случай ждём)
+  // Telegram WebApp init
   function getTg() {
     return (window.Telegram && window.Telegram.WebApp) || null;
   }
   function isRealTelegram() {
     var tg = getTg();
     if (!tg) return false;
-    // в настоящем клиенте Telegram обычно есть initData
     return !!(tg.initData || (tg.initDataUnsafe && (tg.initDataUnsafe.user || tg.initDataUnsafe.query_id)));
   }
   (function initTg() {
@@ -264,58 +258,22 @@
       });
   });
 
-  var downloadJsonBtn = document.getElementById("downloadJsonBtn");
-  if (downloadJsonBtn) {
-    downloadJsonBtn.addEventListener("click", function () {
-      var json = window.__lastJson || "";
-      if (!json) return;
-      var fname = "applicant.json";
-      App.downloadBlob(json, fname).then(function (mode) {
-        var msg = App.downloadHintMessage(mode, fname);
-        if (mode !== "share-cancel") App.showToast(msg);
-        var hint = document.getElementById("downloadHint");
-        if (hint && mode !== "share-cancel") {
-          hint.innerHTML = mode === "share"
-            ? "В меню «Поделиться» выберите <b>Сохранить в Файлы</b> или отправьте себе в Telegram."
-            : (App.isMobileLike()
-                ? "Ищите файл <b>" + fname + "</b> в папке <b>Загрузки</b> или в шторке уведомлений браузера."
-                : "Файл <b>" + fname + "</b> в папке загрузок (Downloads).");
-          hint.style.display = "block";
-          clearTimeout(hint.__t);
-          hint.__t = setTimeout(function () { hint.style.display = "none"; }, 8000);
-        }
-      });
-    });
+  /* ─── Загрузить JSON (из файла на телефоне) ─── */
+  var loadInput = document.getElementById("loadJsonInput");
+
+  function openLoadPicker() {
+    loadInput.value = "";
+    loadInput.click();
   }
 
-  /* Menu */
-  var overlay = document.getElementById("menuOverlay");
-  document.getElementById("menuBtn").addEventListener("click", function () { overlay.style.display = "block"; });
-  document.getElementById("closeMenuBtn").addEventListener("click", function () { overlay.style.display = "none"; });
-  overlay.addEventListener("click", function (e) { if (e.target === overlay) overlay.style.display = "none"; });
+  var loadBtnResult = document.getElementById("loadJsonBtn");
+  if (loadBtnResult) loadBtnResult.addEventListener("click", openLoadPicker);
 
-  document.getElementById("exportDraftBtn").addEventListener("click", function () {
-    overlay.style.display = "none";
-    var flat = App.buildDraftFlat(state);
-    var keys = Object.keys(flat);
-    var filled = 0;
-    keys.forEach(function (k) { if (flat[k]) filled++; });
-    var empty = keys.length - filled;
-    // confirm() в Telegram WebApp часто сразу отменяется — убрали
-    var fname = "anketa-chernovik-" + new Date().toISOString().slice(0, 10) + ".json";
-    App.downloadBlob(JSON.stringify(flat, null, 2), fname).then(function (mode) {
-      App.showToast("Черновик: " + filled + " заполнено, " + empty + " пустых");
-    });
-  });
+  var loadBtnBottom = document.getElementById("loadJsonBtnBottom");
+  if (loadBtnBottom) loadBtnBottom.addEventListener("click", openLoadPicker);
 
-  var importInput = document.getElementById("importDraftInput");
-  document.getElementById("importDraftBtn").addEventListener("click", function () {
-    overlay.style.display = "none";
-    importInput.value = "";
-    importInput.click();
-  });
-  importInput.addEventListener("change", function () {
-    var file = importInput.files && importInput.files[0];
+  loadInput.addEventListener("change", function () {
+    var file = loadInput.files && loadInput.files[0];
     if (!file) return;
     var reader = new FileReader();
     reader.onload = function () {
@@ -324,20 +282,21 @@
         var vals = null;
         var other = {};
         var tog = false;
+
         if (parsed && parsed.__kind === "schengen_form_draft") {
-          // старый формат: data.values / или values на корне
           var data = parsed.data || parsed;
           vals = data.values || data;
           other = data.otherValues || parsed.otherValues || {};
           tog = !!(data.toggleG9 || parsed.toggleG9);
         } else if (parsed && typeof parsed === "object") {
-          // плоский applicant / черновик под userscript
+          // плоский applicant.json или черновик
           vals = parsed.values && typeof parsed.values === "object" ? parsed.values : parsed;
           other = parsed.otherValues || {};
           tog = !!parsed.toggleG9;
         }
+
         if (vals && typeof vals === "object") {
-          // даты с суффиксом BLS → обратно в YYYY-MM-DD для полей формы
+          // даты вида "2025-06-15 00:00:00.000" → "2025-06-15"
           var cleaned = {};
           Object.keys(vals).forEach(function (k) {
             var v = vals[k] == null ? "" : String(vals[k]);
@@ -349,27 +308,30 @@
           state.toggleG9 = tog;
           App.saveState(state);
           renderList();
-          App.showToast("Черновик загружен");
+
+          // скрываем результат/ошибки — пользователь может править дальше
+          document.getElementById("resultPanel").style.display = "none";
+          document.getElementById("errorPanel").style.display = "none";
+          window.__lastJson = null;
+
+          var filled = 0;
+          Object.keys(cleaned).forEach(function (k) { if (cleaned[k]) filled++; });
+          App.showToast("JSON загружен · " + filled + " полей");
+
+          // прокрутка к списку разделов, чтобы сразу видно заполненность
+          setTimeout(function () {
+            var list = document.getElementById("secList");
+            if (list) list.scrollIntoView({ behavior: "smooth", block: "start" });
+          }, 50);
         } else {
-          App.showToast("Нет данных анкеты");
+          App.showToast("Нет данных анкеты в файле");
         }
       } catch (e) {
-        App.showToast("Файл повреждён");
+        App.showToast("Файл повреждён или не JSON");
+        console.error(e);
       }
     };
     reader.readAsText(file, "utf-8");
-  });
-
-  document.getElementById("clearBtn").addEventListener("click", function () {
-    overlay.style.display = "none";
-    if (confirm("Очистить все данные?")) {
-      state = { values: {}, otherValues: {}, toggleG9: false };
-      App.clearState();
-      renderList();
-      document.getElementById("resultPanel").style.display = "none";
-      document.getElementById("errorPanel").style.display = "none";
-      App.showToast("Очищено");
-    }
   });
 
   renderList();
