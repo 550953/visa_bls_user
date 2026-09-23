@@ -330,12 +330,38 @@
     return { errors: errors, values: out };
   }
 
+  var DATE_KEYS = {
+    DateOfBirth: 1, IssueDate: 1, ExpiryDate: 1, TravelDate: 1,
+    IntendedDateOfArrival: 1, IntendedDateOfDeparture: 1, OtherCitizenDateOfBirth: 1
+  };
+
+  /** Все ключи KEY_ORDER; даты → YYYY-MM-DD 00:00:00.000 (как ждёт BLS/userscript) */
+  function toBlsPayload(values) {
+    var ordered = {};
+    KEY_ORDER.forEach(function (k) {
+      var v = (values && values[k] != null) ? String(values[k]).trim() : "";
+      if (v && DATE_KEYS[k] && v.indexOf(" ") === -1) {
+        v = v + " 00:00:00.000";
+      }
+      ordered[k] = v;
+    });
+    return ordered;
+  }
+
   function buildJson(state) {
     var res = validateAll(state);
     if (res.errors.length) return { ok: false, errors: res.errors };
-    var ordered = {};
-    KEY_ORDER.forEach(function (k) { ordered[k] = res.values[k] || ""; });
+    var ordered = toBlsPayload(res.values);
     return { ok: true, json: ordered, str: JSON.stringify(ordered, null, 2) };
+  }
+
+  /** Черновик тоже плоский полный набор ключей (без обёртки __kind) — удобно кидать в userscript */
+  function buildDraftFlat(state) {
+    var values = {};
+    FIELDS.forEach(function (f) {
+      values[f.key] = (state.values[f.key] || "").trim();
+    });
+    return toBlsPayload(values);
   }
 
   /* ─── UI helpers ─── */
@@ -677,6 +703,8 @@
     totalProgress: totalProgress,
     validateAll: validateAll,
     buildJson: buildJson,
+    buildDraftFlat: buildDraftFlat,
+    toBlsPayload: toBlsPayload,
     renderField: renderField,
     showToast: showToast,
     downloadBlob: downloadBlob,

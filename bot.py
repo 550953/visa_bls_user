@@ -2,6 +2,7 @@ import os
 import json
 import logging
 import asyncio
+from io import BytesIO
 
 from aiohttp import web
 from telegram import Update, WebAppInfo, InlineKeyboardButton, InlineKeyboardMarkup, InputFile
@@ -10,14 +11,13 @@ from telegram.ext import Application, CommandHandler, MessageHandler, ContextTyp
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("bot")
 
-# Секреты берём из переменных окружения (задаются в Render, а не в коде)
 BOT_TOKEN = os.environ["BOT_TOKEN"]
 WEBAPP_URL = os.environ.get("WEBAPP_URL", "https://visa_bls_tgbot.shikinn.com/form/index.html")
 PORT = int(os.environ.get("PORT", 10000))
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
 ASSETS = os.path.join(ROOT, "assets")
-START_PHOTO = os.path.join(ASSETS, "start.jpg")  # картинка к /start
+START_PHOTO = os.path.join(ASSETS, "start.jpg")
 
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -46,15 +46,26 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def on_webapp_data(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    # Сюда прилетает то, что форма отправила через tg.sendData(...)
+    """Данные из WebApp (sendData) — отдаём пользователю файлом applicant.json."""
     raw = update.effective_message.web_app_data.data
+    log.info("web_app_data length=%s", len(raw) if raw else 0)
+
+    # Красивый JSON для файла (если пришёл компактный — переформатируем)
     try:
         data = json.loads(raw)
+        pretty = json.dumps(data, ensure_ascii=False, indent=2)
     except json.JSONDecodeError:
-        data = {"raw": raw}
+        data = None
+        pretty = raw or ""
 
-    log.info("Получены данные анкеты: %s", data)
-    await update.message.reply_text(f"Принято: {json.dumps(data, ensure_ascii=False)}")
+    bio = BytesIO(pretty.encode("utf-8"))
+    bio.name = "applicant.json"
+
+    await update.message.reply_document(
+        document=InputFile(bio, filename="applicant.json"),
+        caption="✅ Анкета получена. Файл <b>applicant.json</b> — сохраните его у себя (нажать на файл → Сохранить в Файлы).",
+        parse_mode="HTML",
+    )
 
 
 async def run_bot():
@@ -70,7 +81,6 @@ async def run_bot():
 
 
 async def run_web():
-    # Отдаём статику формы: /form/… и ассеты: /assets/…
     app = web.Application()
     form_dir = os.path.join(ROOT, "form")
     assets_dir = os.path.join(ROOT, "assets")
@@ -81,7 +91,6 @@ async def run_web():
     async def health(request):
         return web.Response(text="ok")
 
-    # / и /health — для health-check (Render и др.)
     app.router.add_get("/", health)
     app.router.add_get("/health", health)
 
@@ -95,7 +104,6 @@ async def run_web():
 async def main():
     await run_web()
     application = await run_bot()
-    # держим процесс живым
     await asyncio.Event().wait()
 
 
