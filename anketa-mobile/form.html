@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
+  <title>Раздел анкеты</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div class="form-header">
+  <a class="back-btn" href="index.html" id="backLink" aria-label="Назад">←</a>
+  <h2 id="formTitle">Раздел</h2>
+</div>
+
+<div class="form-body" id="formBody"></div>
+
+<div class="form-footer">
+  <button class="btn btn-primary btn-full" id="saveBtn" type="button">Сохранить и назад к списку</button>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="app.js"></script>
+<script>
+(function () {
+  "use strict";
+
+  var params = new URLSearchParams(location.search);
+  var gid = params.get("g") || "g1";
+  var group = App.GROUPS.filter(function (g) { return g.id === gid; })[0];
+  if (!group) {
+    location.href = "index.html";
+    return;
+  }
+
+  document.getElementById("formTitle").textContent = group.title;
+  document.title = group.title;
+
+  var state = App.loadState();
+  var saveTimer = null;
+
+  function scheduleSave() {
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(function () {
+      App.saveState(state);
+    }, 300);
+  }
+
+  function render() {
+    var body = document.getElementById("formBody");
+    body.innerHTML = "";
+
+    if (group.optional) {
+      var tog = document.createElement("label");
+      tog.className = "optional-toggle";
+      var cb = document.createElement("input");
+      cb.type = "checkbox";
+      cb.checked = state.toggleG9;
+      tog.appendChild(cb);
+      tog.appendChild(document.createTextNode("Добавить данные о родственнике"));
+      body.appendChild(tog);
+      cb.addEventListener("change", function () {
+        state.toggleG9 = cb.checked;
+        scheduleSave();
+        renderFields(body);
+      });
+    }
+
+    renderFields(body);
+  }
+
+  function renderFields(body) {
+    var nodes = body.querySelectorAll(".field");
+    nodes.forEach(function (n) { n.remove(); });
+
+    if (gid === "g9" && !state.toggleG9) return;
+
+    App.getFieldsOf(gid).forEach(function (f) {
+      body.appendChild(App.renderField(f, state, scheduleSave));
+    });
+  }
+
+  document.getElementById("saveBtn").addEventListener("click", function () {
+    // sync any remaining values from DOM
+    App.getFieldsOf(gid).forEach(function (f) {
+      var el = document.getElementById(f.key);
+      if (!el) return;
+      if (el.tagName === "SELECT") {
+        if (el.value === "__OTHER__") {
+          var o = document.getElementById(f.key + "_other");
+          state.values[f.key] = o ? o.value.trim() : "";
+          state.otherValues[f.key] = o ? o.value : "";
+        } else {
+          state.values[f.key] = el.value;
+          state.otherValues[f.key] = "";
+        }
+      } else {
+        state.values[f.key] = el.value.trim();
+      }
+    });
+    App.saveState(state);
+    location.href = "index.html";
+  });
+
+  // Back link also saves
+  document.getElementById("backLink").addEventListener("click", function (e) {
+    e.preventDefault();
+    document.getElementById("saveBtn").click();
+  });
+
+  render();
+})();
+</script>
+</body>
+</html>
