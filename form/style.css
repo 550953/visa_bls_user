@@ -529,10 +529,10 @@ pre {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 34px;
+  width: 40px;
   height: 34px;
   margin: 0;
-  padding: 0;
+  padding: 0 2px;
   cursor: pointer;
   user-select: none;
   -webkit-user-select: none;
@@ -540,10 +540,11 @@ pre {
   background: #fff;
   border: 2px solid #c5c9d1;
   flex-shrink: 0;
-  font-size: 16px;
+  font-size: 11px;
   font-weight: 700;
   line-height: 1;
-  color: #fff;
+  color: #8a8f99;
+  letter-spacing: -0.02em;
   box-sizing: border-box;
   -webkit-tap-highlight-color: transparent;
   appearance: none;
@@ -556,4 +557,17 @@ pre {
 }
 .allow-empty-tog:active {
   transform: scale(0.94);
+}
+
+.field-disabled .field-row > input,
+.field-disabled .field-row > select,
+.field-disabled .date-part,
+.field-disabled .other-input {
+  opacity: 0.45;
+  background: #eef0f3 !important;
+  pointer-events: none;
+  color: #8a8f99;
+}
+.field-disabled > label {
+  opacity: 0.55;
 }

@@ -745,11 +745,32 @@
     allowBtn.setAttribute("aria-label", "Разрешить пустое: " + f.label);
     allowBtn.setAttribute("aria-pressed", isAllowEmpty(state, f.key) ? "true" : "false");
 
+    function setFieldDisabled(on) {
+      // все инпуты/селекты/date-part в этой строке
+      var controls = fieldRow.querySelectorAll("input:not([type=hidden]), select, .date-part");
+      for (var i = 0; i < controls.length; i++) {
+        var el = controls[i];
+        if (el === allowBtn) continue;
+        el.disabled = !!on;
+        el.readOnly = !!on;
+      }
+      // other-input может быть вне field-row на момент вызова — ищем в wrap
+      var other = wrap.querySelector("#" + f.key + "_other");
+      if (other) {
+        other.disabled = !!on;
+        other.readOnly = !!on;
+      }
+      wrap.classList.toggle("field-disabled", !!on);
+    }
+
     function paintAllow(on) {
       allowBtn.classList.toggle("is-on", !!on);
       allowBtn.setAttribute("aria-pressed", on ? "true" : "false");
-      allowBtn.textContent = on ? "✓" : "";
+      allowBtn.textContent = on ? "вкл" : "выкл";
+      setFieldDisabled(on);
     }
+    // кнопке allow — после добавления в DOM
+    fieldRow.appendChild(allowBtn);
     paintAllow(isAllowEmpty(state, f.key));
 
     allowBtn.addEventListener("click", function (e) {
@@ -758,11 +779,25 @@
       state.allowEmpty = state.allowEmpty || {};
       var on = !state.allowEmpty[f.key];
       state.allowEmpty[f.key] = on;
+      if (on) {
+        // очищаем значение — поле отдаём боту
+        state.values[f.key] = "";
+        var main = wrap.querySelector("#" + f.key);
+        if (main && main.tagName !== "BUTTON") {
+          if (main.tagName === "SELECT") main.value = "";
+          else if (main.type !== "hidden") main.value = "";
+          else main.value = "";
+        }
+        var parts = fieldRow.querySelectorAll(".date-part");
+        for (var pi = 0; pi < parts.length; pi++) parts[pi].value = "";
+        var oth = wrap.querySelector("#" + f.key + "_other");
+        if (oth) { oth.value = ""; oth.classList.remove("show"); }
+        if (state.otherValues) state.otherValues[f.key] = "";
+      }
       paintAllow(on);
       try { saveState(state); } catch (err) {}
       if (onChange) onChange();
     });
-    fieldRow.appendChild(allowBtn);
 
     if (f.hint) {
       var h = document.createElement("div");
