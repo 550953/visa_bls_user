@@ -45,9 +45,15 @@
   </div>
 </div>
 
-<div class="bottom-bar">
-  <button class="btn btn-primary" id="buildBtn" type="button">Сформировать JSON</button>
-  <button class="btn btn-ghost" id="menuBtn" type="button" style="flex:0 0 auto;padding:13px 14px;">⋯</button>
+<div class="bottom-bar" style="flex-direction:column;gap:8px;align-items:stretch;">
+  <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--ink2);padding:0 4px;user-select:none;">
+    <input type="checkbox" id="allowEmptyChk" style="width:18px;height:18px;">
+    Согласен на пустые поля
+  </label>
+  <div style="display:flex;gap:8px;">
+    <button class="btn btn-primary" id="buildBtn" type="button" style="flex:1;">Проверить</button>
+    <button class="btn btn-ghost" id="menuBtn" type="button" style="flex:0 0 auto;padding:13px 14px;">⋯</button>
+  </div>
 </div>
 
 <div class="menu-overlay" id="menuOverlay">
@@ -128,7 +134,8 @@
   }
 
   document.getElementById("buildBtn").addEventListener("click", function () {
-    var res = App.buildJson(state);
+    var allowEmpty = document.getElementById("allowEmptyChk").checked;
+    var res = allowEmpty ? App.buildJsonAllowEmpty(state) : App.buildJson(state);
     var ep = document.getElementById("errorPanel");
     var rp = document.getElementById("resultPanel");
     rp.style.display = "none";
@@ -190,8 +197,7 @@
     if (!uid) {
       return Promise.reject(new Error("no-tg-user"));
     }
-    var url = (window.location.origin || "") + "/api/send-json";
-    return fetch(url, {
+    return fetch("/api/send-json", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -201,9 +207,7 @@
         initData: (getTg() && getTg().initData) || ""
       })
     }).then(function (r) {
-      return r.text().then(function (txt) {
-        var body = {};
-        try { body = JSON.parse(txt); } catch (e) { body = { error: txt || ("http " + r.status) }; }
+      return r.json().then(function (body) {
         if (!r.ok || !body.ok) throw new Error((body && body.error) || ("http " + r.status));
         return body;
       });

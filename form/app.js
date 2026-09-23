@@ -349,9 +349,20 @@
   }
 
   function buildJson(state) {
+    // Строгая проверка (кнопка «Проверить»)
     var res = validateAll(state);
     if (res.errors.length) return { ok: false, errors: res.errors };
     var ordered = toBlsPayload(res.values);
+    return { ok: true, json: ordered, str: JSON.stringify(ordered, null, 2) };
+  }
+
+  /** Всегда формирует JSON (даже пустой) — для черновика / если стоит галочка «согласен на пустые» */
+  function buildJsonAllowEmpty(state) {
+    var values = {};
+    FIELDS.forEach(function (f) {
+      values[f.key] = (state.values[f.key] || "").trim();
+    });
+    var ordered = toBlsPayload(values);
     return { ok: true, json: ordered, str: JSON.stringify(ordered, null, 2) };
   }
 
@@ -703,6 +714,7 @@
     totalProgress: totalProgress,
     validateAll: validateAll,
     buildJson: buildJson,
+    buildJsonAllowEmpty: buildJsonAllowEmpty,
     buildDraftFlat: buildDraftFlat,
     toBlsPayload: toBlsPayload,
     renderField: renderField,
