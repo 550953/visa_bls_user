@@ -738,40 +738,31 @@
       }
     });
 
-    var allowLab = document.createElement("label");
-    allowLab.className = "allow-empty-tog";
-    allowLab.title = "Можно пусто → в JSON будет |";
-    allowLab.setAttribute("for", "allow-" + f.key);
-    var allowCb = document.createElement("input");
-    allowCb.type = "checkbox";
-    allowCb.id = "allow-" + f.key;
-    allowCb.checked = isAllowEmpty(state, f.key);
-    allowCb.setAttribute("aria-label", "Разрешить пустое: " + f.label);
-    allowLab.appendChild(allowCb);
-    fieldRow.appendChild(allowLab);
+    var allowBtn = document.createElement("button");
+    allowBtn.type = "button";
+    allowBtn.className = "allow-empty-tog";
+    allowBtn.title = "Можно пусто → в JSON будет |";
+    allowBtn.setAttribute("aria-label", "Разрешить пустое: " + f.label);
+    allowBtn.setAttribute("aria-pressed", isAllowEmpty(state, f.key) ? "true" : "false");
 
-    function setAllow(on) {
-      state.allowEmpty = state.allowEmpty || {};
-      state.allowEmpty[f.key] = !!on;
-      allowCb.checked = !!on;
-      allowLab.classList.toggle("is-on", !!on);
-      // сразу в localStorage, не ждём debounce
-      try { saveState(state); } catch (e) {}
-      if (onChange) onChange();
+    function paintAllow(on) {
+      allowBtn.classList.toggle("is-on", !!on);
+      allowBtn.setAttribute("aria-pressed", on ? "true" : "false");
+      allowBtn.textContent = on ? "✓" : "";
     }
-    if (allowCb.checked) allowLab.classList.add("is-on");
+    paintAllow(isAllowEmpty(state, f.key));
 
-    // click + change: надёжнее в Telegram WebView
-    allowCb.addEventListener("click", function (e) {
+    allowBtn.addEventListener("click", function (e) {
+      e.preventDefault();
       e.stopPropagation();
+      state.allowEmpty = state.allowEmpty || {};
+      var on = !state.allowEmpty[f.key];
+      state.allowEmpty[f.key] = on;
+      paintAllow(on);
+      try { saveState(state); } catch (err) {}
+      if (onChange) onChange();
     });
-    allowCb.addEventListener("change", function (e) {
-      e.stopPropagation();
-      setAllow(allowCb.checked);
-    });
-    allowLab.addEventListener("click", function (e) {
-      e.stopPropagation();
-    });
+    fieldRow.appendChild(allowBtn);
 
     if (f.hint) {
       var h = document.createElement("div");
