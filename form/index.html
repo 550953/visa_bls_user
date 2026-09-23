@@ -36,11 +36,10 @@
     <pre id="jsonOut"></pre>
     <div class="result-actions" style="flex-wrap:wrap;">
       <button class="btn btn-primary" id="sendTgBtn" type="button" style="flex:1 1 100%;">📲 Получить файл в Telegram</button>
-      <button class="btn btn-ghost" id="downloadJsonBtn" type="button">⬇ Скачать (ПК / Android)</button>
-      <button class="btn btn-ghost" id="copyJsonBtn" type="button">📋 В буфер</button>
     </div>
     <p class="result-hint" id="downloadHint" style="font-size:12.5px;color:var(--ink2);margin-top:10px;">
-      <b>Важно:</b> «Скачать» в Telegram на телефоне часто <b>не создаёт файл</b>. Жмите <b>Получить файл в Telegram</b> — документ придёт в чат с ботом.
+      Нажмите кнопку выше — файл <b>applicant.json</b> придёт в чат с ботом.
+      Черновик можно сохранить через меню <b>⋯</b>.
     </p>
   </div>
 </div>
@@ -294,20 +293,10 @@
     var filled = 0;
     keys.forEach(function (k) { if (flat[k]) filled++; });
     var empty = keys.length - filled;
-    var msg =
-      "В файле будет " + keys.length + " полей.\n" +
-      "Заполнено: " + filled + "\n" +
-      "Пустых: " + empty + "\n\n" +
-      (empty > 0
-        ? "Пустые поля уйдут как \"\". Продолжить сохранение?"
-        : "Все поля заполнены. Сохранить?");
-    if (!confirm(msg)) {
-      App.showToast("Отменено — можно дозаполнить");
-      return;
-    }
+    // confirm() в Telegram WebApp часто сразу отменяется — убрали
     var fname = "anketa-chernovik-" + new Date().toISOString().slice(0, 10) + ".json";
     App.downloadBlob(JSON.stringify(flat, null, 2), fname).then(function (mode) {
-      App.showToast(App.downloadHintMessage(mode, fname));
+      App.showToast("Черновик: " + filled + " заполнено, " + empty + " пустых");
     });
   });
 
