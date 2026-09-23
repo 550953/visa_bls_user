@@ -10,6 +10,53 @@
   <meta property="og:description" content="Заполните 61 поле визовой анкеты на телефоне. Черновик сохраняется локально.">
   <link rel="stylesheet" href="style.css">
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <style>
+    /* компактные кнопки действий */
+    .result-actions {
+      display: flex;
+      flex-wrap: nowrap;
+      gap: 8px;
+      margin-top: 4px;
+    }
+    .result-actions .btn {
+      flex: 1;
+      min-width: 0;
+      padding: 12px 6px;
+      font-size: 13px;
+      line-height: 1.25;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 2px;
+    }
+    .result-actions .btn .ico {
+      font-size: 18px;
+      line-height: 1;
+    }
+    .result-actions .btn:disabled {
+      opacity: 0.45;
+      pointer-events: auto;
+    }
+    #buildBtn {
+      flex: 0 0 auto;
+      min-width: 52px;
+      max-width: 72px;
+      padding: 13px 10px;
+      font-size: 15px;
+      font-weight: 600;
+    }
+    .bottom-actions {
+      display: flex;
+      gap: 10px;
+      width: 100%;
+      align-items: stretch;
+    }
+    .bottom-actions .btn-load {
+      flex: 1;
+      padding: 13px 10px;
+      font-size: 14px;
+    }
+  </style>
 </head>
 <body>
 
@@ -34,13 +81,22 @@
     <h3>Готово — JSON сформирован</h3>
     <p style="font-size:13px;color:var(--ink2);margin-bottom:10px;">61 поле, даты ГГГГ-ММ-ДД.</p>
     <pre id="jsonOut"></pre>
-    <div class="result-actions" style="flex-wrap:wrap;gap:8px;">
-      <button class="btn btn-primary" id="sendTgBtn" type="button" style="flex:1 1 100%;">📲 Получить файл в Telegram</button>
-      <button class="btn btn-ghost" id="loadJsonBtn" type="button" style="flex:1;">⇧ Загрузить JSON</button>
-      <button class="btn btn-ghost" id="copyJsonBtn" type="button" style="flex:1;">⧉ В буфер</button>
+    <div class="result-actions">
+      <button class="btn btn-primary" id="sendTgBtn" type="button" title="Получить файл в Telegram">
+        <span class="ico">📲</span>
+        <span>ТГ</span>
+      </button>
+      <button class="btn btn-ghost" id="loadJsonBtn" type="button" title="Загрузить JSON с телефона">
+        <span class="ico">⇧</span>
+        <span>JSON</span>
+      </button>
+      <button class="btn btn-ghost" id="copyJsonBtn" type="button" title="Скопировать в буфер">
+        <span class="ico">⧉</span>
+        <span>Буфер</span>
+      </button>
     </div>
     <p class="result-hint" id="downloadHint" style="font-size:12.5px;color:var(--ink2);margin-top:10px;">
-      Из Telegram — «Получить файл в Telegram». Чтобы продолжить с готовым файлом — «Загрузить JSON» или «В буфер».
+      <b>ТГ</b> — файл в чат с ботом. <b>JSON</b> — загрузить с телефона. <b>Буфер</b> — скопировать.
     </p>
   </div>
 </div>
@@ -50,13 +106,12 @@
     <input type="checkbox" id="allowEmptyChk" style="width:18px;height:18px;flex-shrink:0;">
     <span>Согласен на пустые поля</span>
   </label>
-  <div style="display:flex;gap:10px;width:100%;">
-    <button class="btn btn-primary" id="buildBtn" type="button" style="flex:1;">Проверить</button>
-    <button class="btn btn-ghost" id="loadJsonBtnBottom" type="button" style="flex:0 0 auto;padding:13px 14px;">⇧ JSON</button>
+  <div class="bottom-actions">
+    <button class="btn btn-primary" id="buildBtn" type="button" title="Проверить и сформировать JSON">✓</button>
+    <button class="btn btn-ghost btn-load" id="loadJsonBtnBottom" type="button" title="Загрузить JSON с телефона">⇧ JSON</button>
   </div>
 </div>
 
-<!-- скрытый input для загрузки JSON (используется обеими кнопками) -->
 <input type="file" id="loadJsonInput" accept="application/json,.json" style="display:none;">
 
 <div class="toast" id="toast"></div>
@@ -125,9 +180,23 @@
     document.getElementById("progressLabel").textContent = p.done + " / " + p.total;
   }
 
+  function allowEmpty() {
+    return document.getElementById("allowEmptyChk").checked;
+  }
+
+  /** ТГ и Буфер доступны только при включённой галке */
+  function syncSendButtons() {
+    var ok = allowEmpty();
+    var tg = document.getElementById("sendTgBtn");
+    var copy = document.getElementById("copyJsonBtn");
+    if (tg) tg.disabled = !ok;
+    if (copy) copy.disabled = !ok;
+  }
+
+  document.getElementById("allowEmptyChk").addEventListener("change", syncSendButtons);
+
   document.getElementById("buildBtn").addEventListener("click", function () {
-    var allowEmpty = document.getElementById("allowEmptyChk").checked;
-    var res = allowEmpty ? App.buildJsonAllowEmpty(state) : App.buildJson(state);
+    var res = allowEmpty() ? App.buildJsonAllowEmpty(state) : App.buildJson(state);
     var ep = document.getElementById("errorPanel");
     var rp = document.getElementById("resultPanel");
     rp.style.display = "none";
@@ -153,21 +222,13 @@
     document.getElementById("jsonOut").textContent = res.str;
     window.__lastJson = res.str;
     rp.style.display = "block";
-    // Прокрутка сразу к кнопкам (TG / Загрузить / Буфер)
+    syncSendButtons();
     setTimeout(function () {
       var actions = document.querySelector(".result-actions") || rp;
       actions.scrollIntoView({ behavior: "smooth", block: "center" });
     }, 50);
   });
 
-  var copyBtn = document.getElementById("copyJsonBtn");
-  if (copyBtn) {
-    copyBtn.addEventListener("click", function () {
-      App.copyText(window.__lastJson || "", this);
-    });
-  }
-
-  // Telegram WebApp init
   function getTg() {
     return (window.Telegram && window.Telegram.WebApp) || null;
   }
@@ -189,7 +250,6 @@
     return tg.initDataUnsafe.user.id || null;
   }
 
-  /** Надёжная доставка: POST на сервер → бот шлёт document в чат */
   function sendJsonToChat(jsonText, filename) {
     var uid = tgUserId();
     if (!uid) {
@@ -213,15 +273,19 @@
   }
 
   document.getElementById("sendTgBtn").addEventListener("click", function () {
+    if (!allowEmpty()) {
+      App.showToast("Сначала поставьте галку «Согласен на пустые поля»");
+      return;
+    }
     var json = window.__lastJson || "";
     if (!json) {
-      App.showToast("Сначала сформируйте JSON");
+      App.showToast("Сначала нажмите ✓");
       return;
     }
     var btn = document.getElementById("sendTgBtn");
-    var oldLabel = btn.textContent;
+    var oldHtml = btn.innerHTML;
     btn.disabled = true;
-    btn.textContent = "Отправка…";
+    btn.innerHTML = "<span class=\"ico\">…</span><span>Ждём</span>";
 
     sendJsonToChat(json, "applicant.json")
       .then(function () {
@@ -237,7 +301,6 @@
         } catch (e) {}
       })
       .catch(function (err) {
-        // fallback: sendData (закроет WebApp, лимит 4096)
         var tg = getTg();
         if (tg && typeof tg.sendData === "function" && isRealTelegram()) {
           try {
@@ -249,16 +312,29 @@
             }
           } catch (e2) {}
         }
-        App.showToast("Не удалось отправить. Откройте из бота или «В буфер»");
+        App.showToast("Не удалось отправить. Откройте из бота или «Буфер»");
         console.error(err);
       })
       .then(function () {
-        btn.disabled = false;
-        btn.textContent = oldLabel;
+        btn.innerHTML = oldHtml;
+        syncSendButtons();
       });
   });
 
-  /* ─── Загрузить JSON (из файла на телефоне) ─── */
+  document.getElementById("copyJsonBtn").addEventListener("click", function () {
+    if (!allowEmpty()) {
+      App.showToast("Сначала поставьте галку «Согласен на пустые поля»");
+      return;
+    }
+    var json = window.__lastJson || "";
+    if (!json) {
+      App.showToast("Сначала нажмите ✓");
+      return;
+    }
+    App.copyText(json, this);
+  });
+
+  /* Загрузить JSON — всегда можно, без галки */
   var loadInput = document.getElementById("loadJsonInput");
 
   function openLoadPicker() {
@@ -289,14 +365,12 @@
           other = data.otherValues || parsed.otherValues || {};
           tog = !!(data.toggleG9 || parsed.toggleG9);
         } else if (parsed && typeof parsed === "object") {
-          // плоский applicant.json или черновик
           vals = parsed.values && typeof parsed.values === "object" ? parsed.values : parsed;
           other = parsed.otherValues || {};
           tog = !!parsed.toggleG9;
         }
 
         if (vals && typeof vals === "object") {
-          // даты вида "2025-06-15 00:00:00.000" → "2025-06-15"
           var cleaned = {};
           Object.keys(vals).forEach(function (k) {
             var v = vals[k] == null ? "" : String(vals[k]);
@@ -309,7 +383,6 @@
           App.saveState(state);
           renderList();
 
-          // скрываем результат/ошибки — пользователь может править дальше
           document.getElementById("resultPanel").style.display = "none";
           document.getElementById("errorPanel").style.display = "none";
           window.__lastJson = null;
@@ -318,7 +391,6 @@
           Object.keys(cleaned).forEach(function (k) { if (cleaned[k]) filled++; });
           App.showToast("JSON загружен · " + filled + " полей");
 
-          // прокрутка к списку разделов, чтобы сразу видно заполненность
           setTimeout(function () {
             var list = document.getElementById("secList");
             if (list) list.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -334,6 +406,7 @@
     reader.readAsText(file, "utf-8");
   });
 
+  syncSendButtons();
   renderList();
 })();
 </script>
