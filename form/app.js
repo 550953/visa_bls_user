@@ -351,7 +351,8 @@
 
     function d(k) {
       var v = out[k];
-      return v ? new Date(v + "T00:00:00") : null;
+      if (!v || v === "|") return null;
+      return new Date(v + "T00:00:00");
     }
     var dob = d("DateOfBirth");
     if (dob && dob.getTime() > Date.now()) {
@@ -379,7 +380,8 @@
     var ordered = {};
     KEY_ORDER.forEach(function (k) {
       var v = (values && values[k] != null) ? String(values[k]).trim() : "";
-      if (v && DATE_KEYS[k] && v.indexOf(" ") === -1) {
+      // "|" — маркер «бот подставит»; не трогаем и не делаем датой
+      if (v && v !== "|" && DATE_KEYS[k] && v.indexOf(" ") === -1) {
         v = v + " 00:00:00.000";
       }
       ordered[k] = v;
@@ -739,16 +741,36 @@
     var allowLab = document.createElement("label");
     allowLab.className = "allow-empty-tog";
     allowLab.title = "Можно пусто → в JSON будет |";
+    allowLab.setAttribute("for", "allow-" + f.key);
     var allowCb = document.createElement("input");
     allowCb.type = "checkbox";
+    allowCb.id = "allow-" + f.key;
     allowCb.checked = isAllowEmpty(state, f.key);
-    allowCb.setAttribute("aria-label", "Разрешить пустое");
+    allowCb.setAttribute("aria-label", "Разрешить пустое: " + f.label);
     allowLab.appendChild(allowCb);
     fieldRow.appendChild(allowLab);
-    allowCb.addEventListener("change", function () {
+
+    function setAllow(on) {
       state.allowEmpty = state.allowEmpty || {};
-      state.allowEmpty[f.key] = allowCb.checked;
+      state.allowEmpty[f.key] = !!on;
+      allowCb.checked = !!on;
+      allowLab.classList.toggle("is-on", !!on);
+      // сразу в localStorage, не ждём debounce
+      try { saveState(state); } catch (e) {}
       if (onChange) onChange();
+    }
+    if (allowCb.checked) allowLab.classList.add("is-on");
+
+    // click + change: надёжнее в Telegram WebView
+    allowCb.addEventListener("click", function (e) {
+      e.stopPropagation();
+    });
+    allowCb.addEventListener("change", function (e) {
+      e.stopPropagation();
+      setAllow(allowCb.checked);
+    });
+    allowLab.addEventListener("click", function (e) {
+      e.stopPropagation();
     });
 
     if (f.hint) {

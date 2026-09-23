@@ -38,6 +38,7 @@
   document.title = group.title;
 
   var state = App.loadState();
+  if (!state.allowEmpty) state.allowEmpty = {};
   var saveTimer = null;
 
   function scheduleSave() {

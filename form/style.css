@@ -529,14 +529,21 @@ pre {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 28px;
-  height: 28px;
+  width: 32px;
+  height: 32px;
   margin: 0;
   padding: 0;
   cursor: pointer;
   user-select: none;
-  border-radius: 6px;
-  background: transparent;
+  -webkit-user-select: none;
+  border-radius: 8px;
+  background: #f0f2f5;
+  border: 1.5px solid #c5c9d1;
+  flex-shrink: 0;
+}
+.allow-empty-tog.is-on {
+  background: #e8f0ff;
+  border-color: var(--accent, #2F6BFF);
 }
 .allow-empty-tog input {
   width: 18px;
@@ -544,7 +551,8 @@ pre {
   margin: 0;
   accent-color: var(--accent, #2F6BFF);
   cursor: pointer;
+  pointer-events: auto;
 }
 .allow-empty-tog:active {
-  background: rgba(47, 107, 255, 0.08);
+  transform: scale(0.96);
 }
