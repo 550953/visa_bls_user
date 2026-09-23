@@ -37,24 +37,11 @@
       opacity: 0.45;
       pointer-events: auto;
     }
-    #buildBtn {
-      flex: 0 0 auto;
-      min-width: 52px;
-      max-width: 72px;
-      padding: 13px 10px;
-      font-size: 15px;
-      font-weight: 600;
-    }
     .bottom-actions {
       display: flex;
-      gap: 10px;
+      gap: 8px;
       width: 100%;
       align-items: stretch;
-    }
-    .bottom-actions .btn-load {
-      flex: 1;
-      padding: 13px 10px;
-      font-size: 14px;
     }
   </style>
 </head>
@@ -104,11 +91,11 @@
 <div class="bottom-bar" style="flex-direction:column;gap:6px;align-items:stretch;height:auto;">
   <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--ink2);padding:0 2px;user-select:none;cursor:pointer;">
     <input type="checkbox" id="allowEmptyChk" style="width:18px;height:18px;flex-shrink:0;">
-    <span>Согласен на пустые поля</span>
+    <span>Только основные данные (паспорт)</span>
   </label>
   <div class="bottom-actions">
-    <button class="btn btn-primary" id="buildBtn" type="button" title="Проверить и сформировать JSON">✓</button>
-    <button class="btn btn-ghost btn-load" id="loadJsonBtnBottom" type="button" title="Загрузить JSON с телефона">⇧ JSON</button>
+    <button class="btn btn-primary" id="buildBtn" type="button" title="Проверить и сформировать JSON" style="flex:1;font-size:16px;padding:14px 16px;">Проверить</button>
+    <button class="btn btn-ghost" id="loadJsonBtnBottom" type="button" title="Загрузить JSON с телефона" style="flex:0 0 auto;min-width:48px;max-width:56px;padding:12px 8px;font-size:16px;">⇧</button>
   </div>
 </div>
 
@@ -184,19 +171,48 @@
     return document.getElementById("allowEmptyChk").checked;
   }
 
-  /** ТГ и Буфер доступны только при включённой галке */
+  /** Раньше блокировали ТГ/Буфер без галки — теперь галка = «только паспорт», отправка всегда после ✓ */
   function syncSendButtons() {
-    var ok = allowEmpty();
     var tg = document.getElementById("sendTgBtn");
     var copy = document.getElementById("copyJsonBtn");
-    if (tg) tg.disabled = !ok;
-    if (copy) copy.disabled = !ok;
+    if (tg) tg.disabled = false;
+    if (copy) copy.disabled = false;
   }
 
-  document.getElementById("allowEmptyChk").addEventListener("change", syncSendButtons);
+  // Поля паспорта (g2) + ключевые личные — «основные данные»
+  var MAIN_KEYS = {
+    FirstName: 1, SurName: 1, SurnameAtBirth: 1, DateOfBirth: 1,
+    PlaceOfBirth: 1, CountryOfBirthId: 1, NationalityId: 1, GenderId: 1,
+    PassportType: 1, PassportNo: 1, IssueDate: 1, ExpiryDate: 1,
+    IssuePlace: 1, IssueCountryId: 1, TravelDate: 1
+  };
 
   document.getElementById("buildBtn").addEventListener("click", function () {
-    var res = allowEmpty() ? App.buildJsonAllowEmpty(state) : App.buildJson(state);
+    var res;
+    if (allowEmpty()) {
+      // Режим «только основные»: проверяем паспорт/личность, остальное можно пустым (позже | )
+      var errs = [];
+      App.FIELDS.forEach(function (f) {
+        if (!MAIN_KEYS[f.key]) return;
+        var v = (state.values[f.key] || "").trim();
+        if (!v) errs.push({ key: f.key, msg: f.label + " — обязательно (основные данные)", group: f.group });
+      });
+      if (errs.length) {
+        res = { ok: false, errors: errs };
+      } else {
+        // Пустые неосновные → "|" (бот потом сможет подставить фейк)
+        var values = {};
+        App.FIELDS.forEach(function (f) {
+          var v = (state.values[f.key] || "").trim();
+          if (!v && !MAIN_KEYS[f.key]) v = "|";
+          values[f.key] = v;
+        });
+        var ordered = App.toBlsPayload(values);
+        res = { ok: true, json: ordered, str: JSON.stringify(ordered, null, 2) };
+      }
+    } else {
+      res = App.buildJson(state);
+    }
     var ep = document.getElementById("errorPanel");
     var rp = document.getElementById("resultPanel");
     rp.style.display = "none";
@@ -273,10 +289,6 @@
   }
 
   document.getElementById("sendTgBtn").addEventListener("click", function () {
-    if (!allowEmpty()) {
-      App.showToast("Сначала поставьте галку «Согласен на пустые поля»");
-      return;
-    }
     var json = window.__lastJson || "";
     if (!json) {
       App.showToast("Сначала нажмите ✓");
@@ -322,10 +334,6 @@
   });
 
   document.getElementById("copyJsonBtn").addEventListener("click", function () {
-    if (!allowEmpty()) {
-      App.showToast("Сначала поставьте галку «Согласен на пустые поля»");
-      return;
-    }
     var json = window.__lastJson || "";
     if (!json) {
       App.showToast("Сначала нажмите ✓");
