@@ -31,12 +31,15 @@
 
   <div id="resultPanel" class="panel ok" style="display:none;">
     <h3>Готово — JSON сформирован</h3>
-    <p style="font-size:13px;color:var(--ink2);margin-bottom:10px;">61 поле, даты ГГГГ-ММ-ДД.</p>
+    <p style="font-size:13px;color:var(--ink2);margin-bottom:10px;">61 поле, даты ГГГГ-ММ-ДД. Можно скопировать в буфер или сохранить файлом на устройство.</p>
     <pre id="jsonOut"></pre>
     <div class="result-actions">
-      <button class="btn btn-primary" id="copyJsonBtn" type="button">Скопировать</button>
-      <button class="btn btn-ghost" id="downloadJsonBtn" type="button">Скачать</button>
+      <button class="btn btn-primary" id="downloadJsonBtn" type="button">⬇ Скачать файл .json</button>
+      <button class="btn btn-ghost" id="copyJsonBtn" type="button">📋 В буфер</button>
     </div>
+    <p class="result-hint" id="downloadHint" style="font-size:12.5px;color:var(--ink2);margin-top:10px;display:none;">
+      Файл <b>applicant.json</b> сохранён в папку загрузок (Downloads).
+    </p>
   </div>
 </div>
 
@@ -157,7 +160,16 @@
   });
 
   document.getElementById("downloadJsonBtn").addEventListener("click", function () {
-    App.downloadBlob(window.__lastJson || "", "applicant.json");
+    var json = window.__lastJson || "";
+    if (!json) return;
+    App.downloadBlob(json, "applicant.json");
+    App.showToast("Файл applicant.json скачан");
+    var hint = document.getElementById("downloadHint");
+    if (hint) {
+      hint.style.display = "block";
+      clearTimeout(hint.__t);
+      hint.__t = setTimeout(function () { hint.style.display = "none"; }, 5000);
+    }
   });
 
   /* Menu */
