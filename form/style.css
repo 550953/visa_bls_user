@@ -506,3 +506,45 @@ pre {
   color: var(--ink);
   font-weight: 600;
 }
+
+
+/* поле + галка «можно пусто» */
+.field-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.field-row > input,
+.field-row > select,
+.field-row > .date-row {
+  flex: 1;
+  min-width: 0;
+}
+.field-row > .other-input {
+  flex: 1 1 100%;
+  width: 100%;
+}
+.allow-empty-tog {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  margin: 0;
+  padding: 0;
+  cursor: pointer;
+  user-select: none;
+  border-radius: 6px;
+  background: transparent;
+}
+.allow-empty-tog input {
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  accent-color: var(--accent, #2F6BFF);
+  cursor: pointer;
+}
+.allow-empty-tog:active {
+  background: rgba(47, 107, 255, 0.08);
+}

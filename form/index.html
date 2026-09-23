@@ -93,6 +93,10 @@
     <input type="checkbox" id="allowEmptyChk" style="width:18px;height:18px;flex-shrink:0;">
     <span>Только основные данные (паспорт)</span>
   </label>
+  <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--ink2);padding:0 2px;user-select:none;cursor:pointer;">
+    <input type="checkbox" id="allowAllEmptyChk" style="width:18px;height:18px;flex-shrink:0;">
+    <span>Разрешаю всё пустое</span>
+  </label>
   <div class="bottom-actions">
     <button class="btn btn-primary" id="buildBtn" type="button" title="Проверить и сформировать JSON" style="flex:1;font-size:16px;padding:14px 16px;">Проверить</button>
     <button class="btn btn-ghost" id="loadJsonBtnBottom" type="button" title="Загрузить JSON с телефона" style="flex:0 0 auto;min-width:48px;max-width:56px;padding:12px 8px;font-size:16px;">⇧</button>
@@ -167,8 +171,11 @@
     document.getElementById("progressLabel").textContent = p.done + " / " + p.total;
   }
 
-  function allowEmpty() {
+  function onlyMain() {
     return document.getElementById("allowEmptyChk").checked;
+  }
+  function allowAllEmpty() {
+    return document.getElementById("allowAllEmptyChk").checked;
   }
 
   /** Раньше блокировали ТГ/Буфер без галки — теперь галка = «только паспорт», отправка всегда после ✓ */
@@ -179,38 +186,34 @@
     if (copy) copy.disabled = false;
   }
 
-  // Поля паспорта (g2) + ключевые личные — «основные данные»
-  var MAIN_KEYS = {
-    FirstName: 1, SurName: 1, SurnameAtBirth: 1, DateOfBirth: 1,
-    PlaceOfBirth: 1, CountryOfBirthId: 1, NationalityId: 1, GenderId: 1,
-    PassportType: 1, PassportNo: 1, IssueDate: 1, ExpiryDate: 1,
-    IssuePlace: 1, IssueCountryId: 1, TravelDate: 1
-  };
+  // Центральные галки → массовая простановка allowEmpty у полей
+  function syncAllowFromCentral() {
+    if (allowAllEmpty()) {
+      App.applyAllowMode(state, "all");
+    } else if (onlyMain()) {
+      App.applyAllowMode(state, "main");
+    } else {
+      App.applyAllowMode(state, "none");
+    }
+    App.saveState(state);
+  }
+
+  document.getElementById("allowEmptyChk").addEventListener("change", function () {
+    if (this.checked) document.getElementById("allowAllEmptyChk").checked = false;
+    syncAllowFromCentral();
+  });
+  document.getElementById("allowAllEmptyChk").addEventListener("change", function () {
+    if (this.checked) document.getElementById("allowEmptyChk").checked = false;
+    syncAllowFromCentral();
+  });
 
   document.getElementById("buildBtn").addEventListener("click", function () {
     var res;
-    if (allowEmpty()) {
-      // Режим «только основные»: проверяем паспорт/личность, остальное можно пустым (позже | )
-      var errs = [];
-      App.FIELDS.forEach(function (f) {
-        if (!MAIN_KEYS[f.key]) return;
-        var v = (state.values[f.key] || "").trim();
-        if (!v) errs.push({ key: f.key, msg: f.label + " — обязательно (основные данные)", group: f.group });
-      });
-      if (errs.length) {
-        res = { ok: false, errors: errs };
-      } else {
-        // Пустые неосновные → "|" (бот потом сможет подставить фейк)
-        var values = {};
-        App.FIELDS.forEach(function (f) {
-          var v = (state.values[f.key] || "").trim();
-          if (!v && !MAIN_KEYS[f.key]) v = "|";
-          values[f.key] = v;
-        });
-        var ordered = App.toBlsPayload(values);
-        res = { ok: true, json: ordered, str: JSON.stringify(ordered, null, 2) };
-      }
+    if (allowAllEmpty()) {
+      // Полностью пустая «рыба» — без проверки, пустые остаются ""
+      res = App.buildJsonAllowEmpty(state);
     } else {
+      // Обычная / точечная: validateAll учитывает allowEmpty → "|"
       res = App.buildJson(state);
     }
     var ep = document.getElementById("errorPanel");

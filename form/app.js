@@ -226,15 +226,16 @@
   function loadState() {
     try {
       var raw = localStorage.getItem(STORAGE_KEY);
-      if (!raw) return { values: {}, otherValues: {}, toggleG9: false };
+      if (!raw) return { values: {}, otherValues: {}, toggleG9: false, allowEmpty: {} };
       var data = JSON.parse(raw);
       return {
         values: data.values || {},
         otherValues: data.otherValues || {},
-        toggleG9: !!data.toggleG9
+        toggleG9: !!data.toggleG9,
+        allowEmpty: data.allowEmpty || {}
       };
     } catch (e) {
-      return { values: {}, otherValues: {}, toggleG9: false };
+      return { values: {}, otherValues: {}, toggleG9: false, allowEmpty: {} };
     }
   }
 
@@ -243,13 +244,47 @@
       localStorage.setItem(STORAGE_KEY, JSON.stringify({
         values: state.values || {},
         otherValues: state.otherValues || {},
-        toggleG9: !!state.toggleG9
+        toggleG9: !!state.toggleG9,
+        allowEmpty: state.allowEmpty || {}
       }));
     } catch (e) {}
   }
 
   function clearState() {
     try { localStorage.removeItem(STORAGE_KEY); } catch (e) {}
+  }
+
+  /** Ключевые поля: паспорт + личность — нельзя помечать пустыми в режиме «только основные» */
+  var MAIN_KEYS = {
+    FirstName: 1, SurName: 1, SurnameAtBirth: 1, DateOfBirth: 1,
+    PlaceOfBirth: 1, CountryOfBirthId: 1, NationalityId: 1, NationalityAtBirthId: 1,
+    GenderId: 1, MaritalStatusId: 1,
+    PassportType: 1, PassportNo: 1, IssueDate: 1, ExpiryDate: 1,
+    IssuePlace: 1, IssueCountryId: 1, TravelDate: 1
+  };
+
+  /**
+   * mode: "all" | "main" | "none"
+   * all  — все поля allowEmpty=true
+   * main — все кроме MAIN_KEYS
+   * none — сброс всех галок
+   */
+  function applyAllowMode(state, mode) {
+    state.allowEmpty = state.allowEmpty || {};
+    FIELDS.forEach(function (f) {
+      if (mode === "all") {
+        state.allowEmpty[f.key] = true;
+      } else if (mode === "main") {
+        state.allowEmpty[f.key] = !MAIN_KEYS[f.key];
+      } else {
+        state.allowEmpty[f.key] = false;
+      }
+    });
+    return state;
+  }
+
+  function isAllowEmpty(state, key) {
+    return !!(state.allowEmpty && state.allowEmpty[key]);
   }
 
   /* ─── Helpers ─── */
@@ -285,6 +320,10 @@
     FIELDS.forEach(function (f) {
       var visible = f.group !== "g9" || state.toggleG9;
       var v = visible ? (state.values[f.key] || "").trim() : "";
+      // пустое + галка «можно пусто» → маркер для бота
+      if (visible && !v && isAllowEmpty(state, f.key)) {
+        v = "|";
+      }
       out[f.key] = v;
 
       if (!visible) return;
@@ -292,7 +331,7 @@
         errors.push({ key: f.key, msg: f.label + " — обязательное поле", group: f.group });
         return;
       }
-      if (!v) return;
+      if (!v || v === "|") return;
       if (f.latin && !LATIN_RE.test(v)) {
         errors.push({ key: f.key, msg: f.label + " — нужна латиница", group: f.group });
       }
@@ -494,6 +533,10 @@
     }
     wrap.appendChild(lab);
 
+    var fieldRow = document.createElement("div");
+    fieldRow.className = "field-row";
+    wrap.appendChild(fieldRow);
+
     var input;
     var val = state.values[f.key] || "";
 
@@ -683,6 +726,31 @@
       }
     }
 
+    // перенос input/select/other/date-row в field-row + галка «можно пусто»
+    var kids = Array.prototype.slice.call(wrap.childNodes);
+    kids.forEach(function (node) {
+      if (node === lab || node === fieldRow) return;
+      if (node.tagName === "INPUT" || node.tagName === "SELECT" ||
+          (node.classList && (node.classList.contains("other-input") || node.classList.contains("date-row")))) {
+        fieldRow.appendChild(node);
+      }
+    });
+
+    var allowLab = document.createElement("label");
+    allowLab.className = "allow-empty-tog";
+    allowLab.title = "Можно пусто → в JSON будет |";
+    var allowCb = document.createElement("input");
+    allowCb.type = "checkbox";
+    allowCb.checked = isAllowEmpty(state, f.key);
+    allowCb.setAttribute("aria-label", "Разрешить пустое");
+    allowLab.appendChild(allowCb);
+    fieldRow.appendChild(allowLab);
+    allowCb.addEventListener("change", function () {
+      state.allowEmpty = state.allowEmpty || {};
+      state.allowEmpty[f.key] = allowCb.checked;
+      if (onChange) onChange();
+    });
+
     if (f.hint) {
       var h = document.createElement("div");
       h.className = "hint";
@@ -706,9 +774,12 @@
     FIELDS: FIELDS,
     GROUPS: GROUPS,
     KEY_ORDER: KEY_ORDER,
+    MAIN_KEYS: MAIN_KEYS,
     loadState: loadState,
     saveState: saveState,
     clearState: clearState,
+    applyAllowMode: applyAllowMode,
+    isAllowEmpty: isAllowEmpty,
     getFieldsOf: getFieldsOf,
     countFilled: countFilled,
     totalProgress: totalProgress,
