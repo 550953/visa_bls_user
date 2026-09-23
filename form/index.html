@@ -22,7 +22,7 @@
   </div>
 </div>
 
-<div id="listView">
+<div id="listView" style="padding-bottom: calc(140px + env(safe-area-inset-bottom, 0px));">
   <div id="secList"></div>
 
   <div id="errorPanel" class="panel err" style="display:none;">
@@ -44,12 +44,12 @@
   </div>
 </div>
 
-<div class="bottom-bar" style="flex-direction:column;gap:8px;align-items:stretch;">
-  <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--ink2);padding:0 4px;user-select:none;">
-    <input type="checkbox" id="allowEmptyChk" style="width:18px;height:18px;">
-    Согласен на пустые поля
+<div class="bottom-bar" style="flex-direction:column;gap:6px;align-items:stretch;height:auto;">
+  <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--ink2);padding:0 2px;user-select:none;cursor:pointer;">
+    <input type="checkbox" id="allowEmptyChk" style="width:18px;height:18px;flex-shrink:0;">
+    <span>Согласен на пустые поля</span>
   </label>
-  <div style="display:flex;gap:8px;">
+  <div style="display:flex;gap:10px;width:100%;">
     <button class="btn btn-primary" id="buildBtn" type="button" style="flex:1;">Проверить</button>
     <button class="btn btn-ghost" id="menuBtn" type="button" style="flex:0 0 auto;padding:13px 14px;">⋯</button>
   </div>
