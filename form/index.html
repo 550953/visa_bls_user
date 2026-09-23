@@ -36,11 +36,11 @@
     <pre id="jsonOut"></pre>
     <div class="result-actions" style="flex-wrap:wrap;">
       <button class="btn btn-primary" id="sendTgBtn" type="button" style="flex:1 1 100%;">📲 Получить файл в Telegram</button>
-      <button class="btn btn-primary" id="downloadJsonBtn" type="button">⬇ Сохранить / Поделиться</button>
+      <button class="btn btn-ghost" id="downloadJsonBtn" type="button">⬇ Скачать (ПК / Android)</button>
       <button class="btn btn-ghost" id="copyJsonBtn" type="button">📋 В буфер</button>
     </div>
     <p class="result-hint" id="downloadHint" style="font-size:12.5px;color:var(--ink2);margin-top:10px;">
-      <b>iPhone:</b> лучше «Получить файл в Telegram» — файл придёт в этот чат, его можно сохранить в Файлы. Обычное «Скачать» в WebView часто не создаёт файл на диске.
+      <b>Важно:</b> «Скачать» в Telegram на телефоне часто <b>не создаёт файл</b>. Жмите <b>Получить файл в Telegram</b> — документ придёт в чат с ботом.
     </p>
   </div>
 </div>
@@ -178,38 +178,79 @@
     }
   })();
 
+  function tgUserId() {
+    var tg = getTg();
+    if (!tg || !tg.initDataUnsafe || !tg.initDataUnsafe.user) return null;
+    return tg.initDataUnsafe.user.id || null;
+  }
+
+  /** Надёжная доставка: POST на сервер → бот шлёт document в чат */
+  function sendJsonToChat(jsonText, filename) {
+    var uid = tgUserId();
+    if (!uid) {
+      return Promise.reject(new Error("no-tg-user"));
+    }
+    return fetch("/api/send-json", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        userId: uid,
+        json: jsonText,
+        filename: filename || "applicant.json",
+        initData: (getTg() && getTg().initData) || ""
+      })
+    }).then(function (r) {
+      return r.json().then(function (body) {
+        if (!r.ok || !body.ok) throw new Error((body && body.error) || ("http " + r.status));
+        return body;
+      });
+    });
+  }
+
   document.getElementById("sendTgBtn").addEventListener("click", function () {
     var json = window.__lastJson || "";
     if (!json) {
       App.showToast("Сначала сформируйте JSON");
       return;
     }
-    var tg = getTg();
-    if (!tg || typeof tg.sendData !== "function") {
-      App.showToast("Откройте анкету кнопкой из бота в Telegram");
-      return;
-    }
-    if (!isRealTelegram()) {
-      // открыли в обычном Safari/Chrome — sendData не дойдёт до бота
-      App.showToast("Нужен Telegram: бот → Заполнить анкету");
-      return;
-    }
-    var compact;
-    try {
-      compact = JSON.stringify(JSON.parse(json));
-    } catch (e) {
-      compact = json;
-    }
-    if (compact.length > 4096) {
-      App.showToast("Слишком большой JSON — нажмите «В буфер»");
-      return;
-    }
-    try {
-      tg.sendData(compact);
-      App.showToast("Готово: закройте окно — файл придёт в чат с ботом");
-    } catch (e) {
-      App.showToast("Ошибка отправки — скопируйте в буфер");
-    }
+    var btn = document.getElementById("sendTgBtn");
+    var oldLabel = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = "Отправка…";
+
+    sendJsonToChat(json, "applicant.json")
+      .then(function () {
+        App.showToast("Файл в чате с ботом — откройте чат");
+        var hint = document.getElementById("downloadHint");
+        if (hint) {
+          hint.innerHTML = "✅ <b>applicant.json</b> отправлен в чат с ботом. Закройте анкету → в чате нажмите файл → «Сохранить в Файлы».";
+          hint.style.display = "block";
+        }
+        try {
+          var tg = getTg();
+          if (tg && tg.showAlert) tg.showAlert("Файл отправлен в чат. Закройте окно и откройте сообщение с applicant.json");
+        } catch (e) {}
+      })
+      .catch(function (err) {
+        // fallback: sendData (закроет WebApp, лимит 4096)
+        var tg = getTg();
+        if (tg && typeof tg.sendData === "function" && isRealTelegram()) {
+          try {
+            var compact = JSON.stringify(JSON.parse(json));
+            if (compact.length <= 4096) {
+              tg.sendData(compact);
+              App.showToast("Отправлено через WebApp — смотрите чат");
+              return;
+            }
+          } catch (e2) {}
+        }
+        App.showToast("Не удалось отправить. Откройте из бота или «В буфер»");
+        console.error(err);
+      })
+      .then(function () {
+        btn.disabled = false;
+        btn.textContent = oldLabel;
+      });
   });
 
   document.getElementById("downloadJsonBtn").addEventListener("click", function () {

@@ -19,6 +19,9 @@ ROOT = os.path.dirname(os.path.abspath(__file__))
 ASSETS = os.path.join(ROOT, "assets")
 START_PHOTO = os.path.join(ASSETS, "start.jpg")
 
+# общий Application — веб-API шлёт документы через него
+bot_app = None
+
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     kb = InlineKeyboardMarkup([[
@@ -46,38 +49,82 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def on_webapp_data(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Данные из WebApp (sendData) — отдаём пользователю файлом applicant.json."""
     raw = update.effective_message.web_app_data.data
     log.info("web_app_data length=%s", len(raw) if raw else 0)
-
-    # Красивый JSON для файла (если пришёл компактный — переформатируем)
     try:
         data = json.loads(raw)
         pretty = json.dumps(data, ensure_ascii=False, indent=2)
     except json.JSONDecodeError:
-        data = None
         pretty = raw or ""
 
     bio = BytesIO(pretty.encode("utf-8"))
     bio.name = "applicant.json"
-
     await update.message.reply_document(
         document=InputFile(bio, filename="applicant.json"),
-        caption="✅ Анкета получена. Файл <b>applicant.json</b> — сохраните его у себя (нажать на файл → Сохранить в Файлы).",
+        caption="✅ Файл <b>applicant.json</b> — нажмите на него → Сохранить в Файлы.",
         parse_mode="HTML",
     )
 
 
-async def run_bot():
-    application = Application.builder().token(BOT_TOKEN).build()
-    application.add_handler(CommandHandler("start", start))
-    application.add_handler(MessageHandler(filters.StatusUpdate.WEB_APP_DATA, on_webapp_data))
+async def api_send_json(request: web.Request):
+    """Форма POST /api/send-json → бот шлёт document в чат user_id."""
+    global bot_app
+    if bot_app is None:
+        return web.json_response({"ok": False, "error": "bot not ready"}, status=503)
 
-    await application.initialize()
-    await application.start()
-    await application.updater.start_polling()
+    try:
+        body = await request.json()
+    except Exception:
+        return web.json_response({"ok": False, "error": "bad json"}, status=400)
+
+    user_id = body.get("userId") or body.get("user_id")
+    raw = body.get("json") or body.get("text") or ""
+    filename = body.get("filename") or "applicant.json"
+    if not str(filename).endswith(".json"):
+        filename = str(filename) + ".json"
+
+    try:
+        user_id = int(user_id)
+    except (TypeError, ValueError):
+        return web.json_response({"ok": False, "error": "userId required"}, status=400)
+
+    if not raw:
+        return web.json_response({"ok": False, "error": "empty json"}, status=400)
+
+    try:
+        data = json.loads(raw) if isinstance(raw, str) else raw
+        pretty = json.dumps(data, ensure_ascii=False, indent=2)
+    except (TypeError, json.JSONDecodeError):
+        pretty = str(raw)
+
+    bio = BytesIO(pretty.encode("utf-8"))
+    bio.name = filename
+
+    try:
+        await bot_app.bot.send_document(
+            chat_id=user_id,
+            document=InputFile(bio, filename=filename),
+            caption="✅ <b>{}</b> — нажмите файл → Сохранить в Файлы / Поделиться.".format(filename),
+            parse_mode="HTML",
+        )
+    except Exception as e:
+        log.exception("send_document failed")
+        return web.json_response({"ok": False, "error": str(e)}, status=500)
+
+    return web.json_response({"ok": True})
+
+
+async def run_bot():
+    global bot_app
+    bot_app = Application.builder().token(BOT_TOKEN).build()
+    bot_app.add_handler(CommandHandler("start", start))
+    bot_app.add_handler(MessageHandler(filters.StatusUpdate.WEB_APP_DATA, on_webapp_data))
+
+    await bot_app.initialize()
+    await bot_app.start()
+    await bot_app.updater.start_polling()
     log.info("Бот запущен (polling)")
-    return application
+    return bot_app
 
 
 async def run_web():
@@ -93,17 +140,18 @@ async def run_web():
 
     app.router.add_get("/", health)
     app.router.add_get("/health", health)
+    app.router.add_post("/api/send-json", api_send_json)
 
     runner = web.AppRunner(app)
     await runner.setup()
     site = web.TCPSite(runner, "0.0.0.0", PORT)
     await site.start()
-    log.info("Веб-сервер запущен на порту %s", PORT)
+    log.info("Веб-сервер на порту %s", PORT)
 
 
 async def main():
     await run_web()
-    application = await run_bot()
+    await run_bot()
     await asyncio.Event().wait()
 
 
